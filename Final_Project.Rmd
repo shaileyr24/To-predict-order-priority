@@ -1,0 +1,93 @@
+---
+title: "Final Project Group 3"
+author: "Shailey Rai "
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+## Data Loading
+```{r}
+cc <- read.csv("Global Superstore.csv")
+head(cc)
+```
+
+
+## Filter out only USA data
+
+```{r}
+usa <- subset(cc,country == "United States")
+head(usa)
+```
+
+## Create a Days to Ship variable
+```{r}
+usa$orderDate <- as.Date(usa$orderDate, format = "%m/%d/%y")
+usa$shipDate <- as.Date(usa$shipDate, format = "%m/%d/%y")
+usa$daysToShip <- usa$shipDate - usa$orderDate
+head(usa)
+```
+
+## Transform quantity from nominal value to factor
+```{r}
+usa$quantity <- factor(usa$quantity,levels=c(1,2,3,4,5,6,7,8,9,10,11,12,13,14),labels= c("1","2","3","4","5","6","7","8","9","10","11","12","13","14"))
+class(usa$quantity)
+```
+
+## Split Train and Test data (80% train, 20% test)
+```{r}
+ind <- sample(2, nrow(usa), replace=T, prob= c(0.8,0.2))
+train <- usa[ind==1,]
+test <- usa[ind==2,]
+```
+
+
+## Use Decision Tree to predict Order Priority
+```{r}
+library("rpart")
+library("rpart.plot")
+dtPriority <- rpart(orderPriority ~ shipMode + daysToShip + category + segment + region + quantity, train, method="class", parms=list(split='information'), minsplit=10, cp=0.001)
+rpart.plot(dtPriority, type=4)
+```
+
+```{r}
+dtPredict<- predict(dtPriority, test, type="class")
+library(caret)
+confusionMatrix(dtPredict,test$orderPriority)
+```
+
+
+## Use Naive Bayes to predict Order Priority
+```{r}
+library(e1071)
+nbPriority <- naiveBayes(orderPriority ~ shipMode + daysToShip + segment + category + region + quantity, train)
+nbPriority
+```
+
+```{r}
+nbPredict <- predict(nbPriority, test, type = "class")
+confusionMatrix(nbPredict,test$orderPriority)
+```
+
+##Create ROC Curve
+
+```{r}
+library(ROCR)
+library(ggplot2)
+nbPredict2 <- predict(nbPriority, test, type = "raw")
+score<- nbPredict2[,c("Critical")]
+actual_class<-test$orderPriority =="Critical"
+pred<-prediction(score,actual_class)
+perf<- performance(pred,"tpr", "fpr")
+plot(perf, lwd=2, xlab="False Positive Rate (FPR) ",ylab="True Positive Rate (TPR) ")
+```
+
+```{r}
+auc <- performance (pred, "auc")
+auc <- unlist (slot(auc, "y.values"))
+auc
+```
+
+
+
